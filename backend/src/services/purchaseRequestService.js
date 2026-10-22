@@ -77,3 +77,41 @@ export const createPurchaseRequest = async (userId, input) => {
 
   return purchaseRequest;
 };
+
+
+export const getMyPurchaseRequests = async (userId) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    const error = new Error("Invalid authenticated user");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const user = await User.findById(userId).select(
+    "_id isActive roles"
+  );
+
+  if (!user || !user.isActive) {
+    const error = new Error("User is unavailable or inactive");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (!user.roles.includes("employee")) {
+    const error = new Error(
+      "Only employees can view their purchase requests"
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const requests = await PurchaseRequest.find({
+    requesterId: user._id,
+  })
+    .sort({ createdAt: -1 })
+    .select(
+      "title description justification quantity unitPricePaise totalAmountPaise status currentCycleNumber createdAt updatedAt"
+    )
+    .lean();
+
+  return requests;
+};
