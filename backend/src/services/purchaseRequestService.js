@@ -115,3 +115,53 @@ export const getMyPurchaseRequests = async (userId) => {
 
   return requests;
 };
+
+
+export const getPurchaseRequestById = async (userId, requestId) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    const error = new Error("Invalid authenticated user");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (!mongoose.isValidObjectId(requestId)) {
+    const error = new Error("Invalid purchase request ID");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await User.findById(userId).select(
+    "_id isActive roles"
+  );
+
+  if (!user || !user.isActive) {
+    const error = new Error("User is unavailable or inactive");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (!user.roles.includes("employee")) {
+    const error = new Error(
+      "Only employees can view purchase requests"
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const request = await PurchaseRequest.findOne({
+    _id: requestId,
+    requesterId: user._id,
+  })
+    .select(
+      "title description justification quantity unitPricePaise totalAmountPaise status currentCycleNumber lastRejectionReason createdAt updatedAt"
+    )
+    .lean();
+
+  if (!request) {
+    const error = new Error("Purchase request not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return request;
+};

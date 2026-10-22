@@ -1,9 +1,12 @@
 
 
+
 import {
   createPurchaseRequest,
   getMyPurchaseRequests,
+  getPurchaseRequestById,
 } from "../services/purchaseRequestService.js";
+
 
 
 export const createRequest = async (req, res, next) => {
@@ -43,3 +46,21 @@ export const getMyRequests = async (req, res, next) => {
   }
 };
 
+
+export const getRequestById = async (req, res, next) => {
+  try {
+    const request = await getPurchaseRequestById(
+      req.user._id,
+      req.params.id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        request,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
