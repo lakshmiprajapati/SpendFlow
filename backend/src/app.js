@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 
 import authRoutes from "./routes/authRoutes.js";
+import purchaseRequestRoutes from "./routes/purchaseRequestRoutes.js";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get("/api/health", (req, res) => {
 
 // Authentication routes
 app.use("/api/auth", authRoutes);
+app.use("/api/requests", purchaseRequestRoutes);
 
 // Handle unknown routes
 app.use((req, res) => {
@@ -34,18 +36,27 @@ app.use((req, res) => {
   });
 });
 
-// Centralized error handler
-app.use((err, req, res, next) => {
-  console.error("API error:", err.message);
 
+app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
   }
 
-  res.status(500).json({
+  console.error("API error:", err.message);
+
+  const statusCode = Number.isInteger(err.statusCode)
+    ? err.statusCode
+    : 500;
+
+  return res.status(statusCode).json({
     success: false,
-    message: "Internal server error",
+    message:
+      statusCode >= 500
+        ? "Internal server error"
+        : err.message,
+    ...(err.details ? { errors: err.details } : {}),
   });
 });
+
 
 export default app;
