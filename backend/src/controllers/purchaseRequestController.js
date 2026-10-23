@@ -1,10 +1,8 @@
-
-
-
 import {
   createPurchaseRequest,
   getMyPurchaseRequests,
   getPurchaseRequestById,
+  updateDraftPurchaseRequest,
 } from "../services/purchaseRequestService.js";
 
 
@@ -56,6 +54,27 @@ export const getRequestById = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
+      data: {
+        request,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateDraftRequest = async (req, res, next) => {
+  try {
+    const request = await updateDraftPurchaseRequest(
+      req.user._id,
+      req.params.id,
+      req.body
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Purchase request updated successfully",
       data: {
         request,
       },
