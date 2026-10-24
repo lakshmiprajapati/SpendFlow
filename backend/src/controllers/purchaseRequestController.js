@@ -68,43 +68,47 @@ export const getRequestById = async (req, res, next) => {
 };
 
 
+
 export const updateDraftRequest = async (req, res, next) => {
   try {
-    const request = await updateDraftPurchaseRequest(
-      req.user._id,
-      req.params.id,
-      req.body
-    );
+    const request = await updateDraftPurchaseRequest({
+      userId: req.user._id,
+      requestId: req.params.id,
+      input: req.body,
+    });
 
     return res.status(200).json({
       success: true,
       message: "Purchase request updated successfully",
-      data: {
-        request,
-      },
+      data: { request },
     });
   } catch (error) {
     next(error);
   }
 };
+
+
 
 
 export const submitRequest = async (req, res, next) => {
   try {
-    const request = await submitPurchaseRequest(
-      req.user._id,
-      req.params.id
-    );
+    const request = await submitPurchaseRequest({
+      userId: req.user._id,
+      requestId: req.params.id,
+    });
 
     return res.status(200).json({
       success: true,
       message: "Purchase request submitted for approval",
-      data: request,
+      data: { request },
     });
   } catch (error) {
     next(error);
   }
 };
+
+
+
 
 export const getManagerPendingApprovals = async (req, res, next) => {
   try {

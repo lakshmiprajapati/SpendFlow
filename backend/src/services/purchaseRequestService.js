@@ -296,37 +296,37 @@ export const getPurchaseRequestById = async (userId, requestId) => {
 };
 
 
-export const updateDraftPurchaseRequest = async (
+
+
+
+
+
+export async function updateDraftPurchaseRequest({
   userId,
   requestId,
-  input
-) => {
-  if (!mongoose.isValidObjectId(userId)) {
-    const error = new Error("Invalid authenticated user");
-    error.statusCode = 401;
-    throw error;
-  }
-
-  if (!mongoose.isValidObjectId(requestId)) {
-    const error = new Error("Invalid purchase request ID");
+  input,
+}) {
+  if (
+    !mongoose.isValidObjectId(userId) ||
+    !mongoose.isValidObjectId(requestId)
+  ) {
+    const error = new Error("Invalid user ID or request ID");
     error.statusCode = 400;
     throw error;
   }
 
   const user = await User.findById(userId).select(
-    "_id isActive roles"
+    "_id isActive roles departmentId"
   );
 
   if (!user || !user.isActive) {
-    const error = new Error("User is unavailable or inactive");
+    const error = new Error("User not found or inactive");
     error.statusCode = 401;
     throw error;
   }
 
   if (!user.roles.includes("employee")) {
-    const error = new Error(
-      "Only employees can update purchase requests"
-    );
+    const error = new Error("Only employees can update purchase requests");
     error.statusCode = 403;
     throw error;
   }
@@ -344,9 +344,20 @@ export const updateDraftPurchaseRequest = async (
 
   if (!["draft", "rejected"].includes(request.status)) {
     const error = new Error(
-        "Only draft or rejected requests can be updated"
+      "Only draft or rejected requests can be edited"
     );
     error.statusCode = 409;
+    throw error;
+  }
+
+  if (
+    !user.departmentId ||
+    request.departmentId.toString() !== user.departmentId.toString()
+  ) {
+    const error = new Error(
+      "You can only edit requests from your own department"
+    );
+    error.statusCode = 403;
     throw error;
   }
 
@@ -364,38 +375,43 @@ export const updateDraftPurchaseRequest = async (
   request.justification = input.justification.trim();
   request.quantity = input.quantity;
   request.unitPricePaise = input.unitPricePaise;
+  request.totalAmountPaise = input.quantity * input.unitPricePaise;
 
   await request.save();
 
   return request;
-};
+}
 
 
 
 
-export const submitPurchaseRequest = async (userId, requestId) => {
-  if (!mongoose.isValidObjectId(userId)) {
-    const error = new Error("Invalid authenticated user");
-    error.statusCode = 401;
-    throw error;
-  }
 
-  if (!mongoose.isValidObjectId(requestId)) {
-    const error = new Error("Invalid purchase request ID");
+
+
+
+export async function submitPurchaseRequest({ userId, requestId }) {
+  // 1. Validate IDs
+  if (
+    !mongoose.isValidObjectId(userId) ||
+    !mongoose.isValidObjectId(requestId)
+  ) {
+    const error = new Error("Invalid user ID or request ID");
     error.statusCode = 400;
     throw error;
   }
 
+  // 2. Find active user
   const user = await User.findById(userId).select(
     "_id isActive roles departmentId"
   );
 
   if (!user || !user.isActive) {
-    const error = new Error("User is unavailable or inactive");
+    const error = new Error("User not found or inactive");
     error.statusCode = 401;
     throw error;
   }
 
+  // 3. Only employees can submit requests
   if (!user.roles.includes("employee")) {
     const error = new Error(
       "Only employees can submit purchase requests"
@@ -404,6 +420,7 @@ export const submitPurchaseRequest = async (userId, requestId) => {
     throw error;
   }
 
+  // 4. Find request owned by this user
   const request = await PurchaseRequest.findOne({
     _id: requestId,
     requesterId: user._id,
@@ -415,25 +432,28 @@ export const submitPurchaseRequest = async (userId, requestId) => {
     throw error;
   }
 
-  if (request.status !== "draft") {
+  // 5. Allow draft and rejected requests only
+  if (!["draft", "rejected"].includes(request.status)) {
     const error = new Error(
-      "Only draft purchase requests can be submitted"
+      "Only draft or rejected requests can be submitted"
     );
-    error.statusCode = 400;
+    error.statusCode = 409;
     throw error;
   }
 
+  // 6. Verify department ownership
   if (
     !user.departmentId ||
     request.departmentId.toString() !== user.departmentId.toString()
   ) {
     const error = new Error(
-      "Request department does not match the employee's department"
+      "You can only submit requests from your own department"
     );
     error.statusCode = 403;
     throw error;
   }
 
+  // 7. Find active department
   const department = await Department.findOne({
     _id: request.departmentId,
     isActive: true,
@@ -442,21 +462,21 @@ export const submitPurchaseRequest = async (userId, requestId) => {
   );
 
   if (!department) {
-    const error = new Error("Request department is unavailable");
-    error.statusCode = 400;
+    const error = new Error("Active department not found");
+    error.statusCode = 409;
     throw error;
   }
 
+  // 8. Select applicable approval policy
   const policy = await selectApprovalPolicy(
-    department._id,
+    request.departmentId,
     request.totalAmountPaise
   );
 
-  const approvalSteps = await resolveApprovalSteps(
-    policy,
-    department
-  );
+  // 9. Resolve sequential approval steps
+  const steps = await resolveApprovalSteps(policy, department);
 
+  // 10. Create the next approval cycle
   const nextCycleNumber = request.currentCycleNumber + 1;
 
   request.approvalCycles.push({
@@ -465,105 +485,36 @@ export const submitPurchaseRequest = async (userId, requestId) => {
     policyVersion: policy.version,
     submittedAt: new Date(),
     completedAt: null,
-    steps: approvalSteps,
+    steps,
   });
 
   request.currentCycleNumber = nextCycleNumber;
   request.status = "pending_approval";
-  request.lastRejectionReason = undefined;
+  request.lastRejectionReason = "";
 
   await request.save();
 
+  // 11. Record the submission in the audit log
   await AuditLog.create({
     actorId: user._id,
-    action: "REQUEST_SUBMITTED",
+    action:
+      nextCycleNumber > 1
+        ? "REQUEST_RESUBMITTED"
+        : "REQUEST_SUBMITTED",
     entityType: "PurchaseRequest",
     entityId: request._id,
     requestId: request._id,
     cycleNumber: nextCycleNumber,
     metadata: {
-      policyId: policy._id,
-      policyVersion: policy.version,
-      amountPaise: request.totalAmountPaise,
-      approvalStepCount: approvalSteps.length,
+      resubmitted: nextCycleNumber > 1,
     },
   });
 
   return request;
-};
-
-
-
-export const getPendingApprovals = async (userId) => {
-  if (!mongoose.isValidObjectId(userId)) {
-    const error = new Error("Invalid authenticated user");
-    error.statusCode = 401;
-    throw error;
-  }
-
-  const approver = await User.findById(userId).select(
-    "_id isActive roles"
-  );
-
-  if (!approver || !approver.isActive) {
-    const error = new Error("User is unavailable or inactive");
-    error.statusCode = 401;
-    throw error;
-  }
-
-  const allowedRoles = [
-    "manager",
-    "departmentHead",
-    "financeApprover",
-  ];
-
-  if (!approver.roles.some((role) => allowedRoles.includes(role))) {
-    const error = new Error(
-      "You are not authorized to view pending approvals"
-    );
-    error.statusCode = 403;
-    throw error;
-  }
-
-  const requests = await PurchaseRequest.find({
-    status: "pending_approval",
-    "approvalCycles.steps.approverId": approver._id,
-    "approvalCycles.steps.status": "pending",
-  })
-    .select(
-      "requesterId departmentId title description justification quantity unitPricePaise totalAmountPaise status currentCycleNumber approvalCycles createdAt updatedAt"
-    )
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return requests.flatMap((request) => {
-    const currentCycle = request.approvalCycles.find(
-      (cycle) => cycle.cycleNumber === request.currentCycleNumber
-    );
-
-    if (!currentCycle) return [];
-
-    const nextStep = currentCycle.steps
-  .filter((step) => step.status === "pending")
-  .sort((a, b) => a.sequence - b.sequence)[0];
-
-if (!nextStep || nextStep.approverId.toString() !== approver._id.toString()) {
-  return [];
 }
 
-const pendingSteps = [nextStep];
 
-    // Only return the request if this approver owns a pending step
-    // in the current cycle.
-    if (pendingSteps.length === 0) return [];
 
-    return [{
-      ...request,
-      approvalCycles: [currentCycle],
-      pendingSteps,
-    }];
-  });
-};
 
 
 
@@ -909,4 +860,71 @@ export const resubmitPurchaseRequest = async (userId, requestId) => {
   });
 
   return request;
+};
+
+
+
+
+
+
+export const getPendingApprovals = async (userId) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    const error = new Error("Invalid authenticated user");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const approver = await User.findById(userId).select(
+    "_id isActive roles"
+  );
+
+  if (!approver || !approver.isActive) {
+    const error = new Error("User is unavailable or inactive");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const allowedRoles = [
+    "manager",
+    "departmentHead",
+    "financeApprover",
+  ];
+
+  if (!approver.roles.some((role) => allowedRoles.includes(role))) {
+    const error = new Error(
+      "Only authorized approvers can view pending approvals"
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const requests = await PurchaseRequest.find({
+    status: "pending_approval",
+  })
+    .select(
+      "requesterId departmentId title description justification quantity unitPricePaise totalAmountPaise status currentCycleNumber approvalCycles createdAt updatedAt"
+    )
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const pendingRequests = requests.filter((request) => {
+    const currentCycle = request.approvalCycles.find(
+      (cycle) => cycle.cycleNumber === request.currentCycleNumber
+    );
+
+    if (!currentCycle) {
+      return false;
+    }
+
+    const nextStep = currentCycle.steps
+      .filter((step) => step.status === "pending")
+      .sort((a, b) => a.sequence - b.sequence)[0];
+
+    return (
+      nextStep &&
+      nextStep.approverId.toString() === approver._id.toString()
+    );
+  });
+
+  return pendingRequests;
 };
