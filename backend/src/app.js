@@ -5,6 +5,9 @@ import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import purchaseRequestRoutes from "./routes/purchaseRequestRoutes.js";
 
+import budgetRoutes from "./routes/budgetRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+
 const app = express();
 
 app.use(cors());
@@ -58,5 +61,7 @@ app.use((err, req, res, next) => {
   });
 });
 
+app.use("/api/budgets", budgetRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 export default app;
