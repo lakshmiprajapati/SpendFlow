@@ -20,6 +20,9 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
 
   
@@ -86,12 +89,22 @@ function Dashboard() {
           ? fetch(`${API_URL}/dashboard/approver`, { headers })
           : Promise.resolve(null);
 
-        const [employeeResponse, budgetResponse, approverResponse] =
-          await Promise.all([
-            employeePromise,
-            budgetPromise,
-            approverPromise,
-          ]);
+        const notificationsPromise = fetch(
+          `${API_URL}/notifications?limit=10`,
+          { headers }
+        );
+
+        const [
+          employeeResponse,
+          budgetResponse,
+          approverResponse,
+          notificationsResponse,
+        ] = await Promise.all([
+          employeePromise,
+          budgetPromise,
+          approverPromise,
+          notificationsPromise,
+        ]);
 
         
         // 3. Purchase request summary, recent activity and budget
@@ -111,6 +124,16 @@ if (employeeResponse.ok) {
   setError("Unable to load your purchase request summary.");
 }
 
+        // 4. Notifications and unread count
+        if (notificationsResponse.ok) {
+          const notificationsData = await notificationsResponse.json();
+          setNotifications(
+            Array.isArray(notificationsData.data)
+              ? notificationsData.data
+              : []
+          );
+          setUnreadCount(notificationsData.unreadCount ?? 0);
+        }
 
         // 5. Pending approvals
         if (approverResponse) {
@@ -142,6 +165,67 @@ if (employeeResponse.ok) {
   
 
 
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    const notification = notifications.find(
+      (item) => item._id === notificationId
+    );
+
+    if (!notification || notification.readAt) return;
+
+    const token = localStorage.getItem("spendflow_token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/notifications/${notificationId}/read`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const updatedNotification = data.data;
+
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item._id === notificationId
+            ? { ...item, ...updatedNotification }
+            : item
+        )
+      );
+      setUnreadCount((previous) => Math.max(0, previous - 1));
+    } catch (notificationError) {
+      console.error("Unable to mark notification as read:", notificationError);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    if (unreadCount === 0) return;
+
+    const token = localStorage.getItem("spendflow_token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_URL}/notifications/read-all`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) return;
+
+      const readAt = new Date().toISOString();
+      setNotifications((previous) =>
+        previous.map((item) => ({ ...item, readAt: item.readAt || readAt }))
+      );
+      setUnreadCount(0);
+    } catch (notificationError) {
+      console.error("Unable to mark all notifications as read:", notificationError);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("spendflow_token");
@@ -334,6 +418,78 @@ if (employeeResponse.ok) {
           <div className="sf-topbar-right">
             <span className="sf-status-dot" />
             <span className="sf-online-label">Workspace active</span>
+
+            <div className="sf-notification-wrapper">
+              <button
+                type="button"
+                className="sf-notification-button"
+                aria-label={`Notifications, ${unreadCount} unread`}
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
+                <span aria-hidden="true">♧</span>
+                {unreadCount > 0 && (
+                  <span className="sf-notification-badge">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="sf-notification-panel">
+                  <div className="sf-notification-panel-heading">
+                    <div>
+                      <strong>Notifications</strong>
+                      <span>{unreadCount} unread</span>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllNotificationsRead}
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  {notifications.length > 0 ? (
+                    <div className="sf-notification-list">
+                      {notifications.map((notification) => (
+                        <button
+                          type="button"
+                          key={notification._id}
+                          className={`sf-notification-item ${
+                            notification.readAt ? "" : "sf-notification-unread"
+                          }`}
+                          onClick={() =>
+                            handleMarkNotificationRead(notification._id)
+                          }
+                        >
+                          <strong>{notification.title}</strong>
+                          <span>{notification.message}</span>
+                          <small>
+                            {notification.createdAt
+                              ? new Date(notification.createdAt).toLocaleString(
+                                  "en-IN",
+                                  {
+                                    day: "numeric",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )
+                              : "Just now"}
+                          </small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="sf-notification-empty">No notifications yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="sf-avatar" title={displayName}>
               {initials}
             </div>

@@ -9,6 +9,7 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
 import auditLogRoutes from "./routes/auditLogRoutes.js";
 import approvalPolicyRoutes from "./routes/approvalPolicyRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/audit-logs", auditLogRoutes);
 app.use("/api/approval-policies", approvalPolicyRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Handle unknown routes — must come after all routes
 app.use((req, res) => {

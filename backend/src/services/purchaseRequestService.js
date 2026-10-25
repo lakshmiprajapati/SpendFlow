@@ -12,6 +12,8 @@ import {
   validatePurchaseRequestInput,
 } from "../utils/requestValidation.js";
 
+import { createNotification } from "./notificationService.js";
+
 
 const selectApprovalPolicy = async (departmentId, amountPaise) => {
   const matchingPolicies = await ApprovalPolicy.find({
@@ -521,6 +523,47 @@ export async function submitPurchaseRequest({ userId, requestId }) {
     },
   });
 
+  
+  // Create notifications without failing the submission if notification delivery fails.
+  try {
+    const firstApprover = [...steps]
+      .filter((step) => step.status === "pending")
+      .sort((a, b) => a.sequence - b.sequence)[0];
+
+    await Promise.all([
+      createNotification({
+        recipientId: user._id,
+        actorId: user._id,
+        type:
+          nextCycleNumber > 1
+            ? "REQUEST_RESUBMITTED"
+            : "REQUEST_SUBMITTED",
+        title:
+          nextCycleNumber > 1
+            ? "Purchase Request Resubmitted"
+            : "Purchase Request Submitted",
+        message: `"${request.title}" has been submitted for approval.`,
+        entityId: request._id,
+      }),
+      firstApprover
+        ? createNotification({
+            recipientId: firstApprover.approverId,
+            actorId: user._id,
+            type: "APPROVAL_PENDING",
+            title: "Approval Required",
+            message: `"${request.title}" is waiting for your approval.`,
+            entityId: request._id,
+          })
+        : Promise.resolve(null),
+    ]);
+  } catch (notificationError) {
+    console.error(
+      "Failed to create submission notifications:",
+      notificationError.message
+    );
+  }
+
+
   return request;
 }
 
@@ -568,6 +611,8 @@ export const decidePurchaseRequest = async (
 
   const session = await mongoose.startSession();
   let updatedRequest;
+  let notificationDetails = null;
+
 
   try {
     await session.withTransaction(async () => {
@@ -724,6 +769,18 @@ export const decidePurchaseRequest = async (
 
       await request.save({ session });
 
+      notificationDetails = {
+  requesterId: request.requesterId,
+  requestId: request._id,
+  requestTitle: request.title,
+  actorId: approver._id,
+  decision,
+  nextApproverId: currentCycle.steps
+    .filter((item) => item.status === "pending")
+    .sort((a, b) => a.sequence - b.sequence)[0]?.approverId ?? null,
+  finalStatus: request.status,
+};
+
       await AuditLog.create(
         [
           {
@@ -752,8 +809,69 @@ export const decidePurchaseRequest = async (
     await session.endSession();
   }
 
+
+  // Notify the requester and the next approver after the decision is saved.
+  if (notificationDetails) {
+    try {
+      const {
+        requesterId,
+        requestId,
+        requestTitle,
+        actorId,
+        decision,
+        nextApproverId,
+        finalStatus,
+      } = notificationDetails;
+
+      const notifications = [
+        createNotification({
+          recipientId: requesterId,
+          actorId,
+          type:
+            decision === "reject"
+              ? "REQUEST_REJECTED"
+              : "REQUEST_APPROVED",
+          title:
+            decision === "reject"
+              ? "Purchase Request Rejected"
+              : finalStatus === "approved"
+                ? "Purchase Request Approved"
+                : "Approval Step Completed",
+          message:
+            decision === "reject"
+              ? `Your request "${requestTitle}" was rejected.`
+              : finalStatus === "approved"
+                ? `Your request "${requestTitle}" has been fully approved.`
+                : `An approval step for "${requestTitle}" has been completed.`,
+          entityId: requestId,
+        }),
+      ];
+
+      if (decision === "approve" && nextApproverId) {
+        notifications.push(
+          createNotification({
+            recipientId: nextApproverId,
+            actorId,
+            type: "APPROVAL_PENDING",
+            title: "Approval Required",
+            message: `"${requestTitle}" is waiting for your approval.`,
+            entityId: requestId,
+          })
+        );
+      }
+
+      await Promise.all(notifications);
+    } catch (notificationError) {
+      console.error(
+        "Failed to create decision notifications:",
+        notificationError.message
+      );
+    }
+  }
+
   return updatedRequest;
 };
+
 
 
 
@@ -868,6 +986,30 @@ export const resubmitPurchaseRequest = async (userId, requestId) => {
       policyVersion: policy.version,
     },
   });
+
+
+
+  try {
+  const firstApprover = [...steps]
+    .filter((step) => step.status === "pending")
+    .sort((a, b) => a.sequence - b.sequence)[0];
+
+  if (firstApprover) {
+    await createNotification({
+      recipientId: firstApprover.approverId,
+      actorId: user._id,
+      type: "APPROVAL_PENDING",
+      title: "Approval Required",
+      message: `"${request.title}" has been resubmitted and is waiting for your approval.`,
+      entityId: request._id,
+    });
+  }
+} catch (notificationError) {
+  console.error(
+    "Failed to create resubmission notification:",
+    notificationError.message
+  );
+}
 
   return request;
 };
