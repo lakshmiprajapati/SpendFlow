@@ -6,6 +6,7 @@ import Approvals from "./pages/Approvals.jsx";
 import PurchaseRequests from "./pages/PurchaseRequests.jsx";
 import Budgets from "./pages/Budgets.jsx";
 import AuditLogs from "./pages/AuditLogs.jsx";
+import ApprovalPolicies from "./pages/ApprovalPolicies.jsx";
 
 const API_URL = "http://localhost:5000/api";
 
@@ -180,6 +181,10 @@ function App() {
   if (path === "/budgets") return <Budgets />;
 
   if (path === "/audit-logs") return <AuditLogs />;
+
+  if (path === "/approval-policies") {
+    return <ApprovalPolicies />;
+  }
 
   return <Login />;
 }
