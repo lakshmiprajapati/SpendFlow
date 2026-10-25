@@ -31,6 +31,7 @@ function PurchaseRequests() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submittingId, setSubmittingId] = useState("");
+  const [editingRequestId, setEditingRequestId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -43,9 +44,7 @@ function PurchaseRequests() {
       ...options,
       headers: {
         Authorization: `Bearer ${localStorage.getItem("spendflow_token")}`,
-        ...(options.body
-          ? { "Content-Type": "application/json" }
-          : {}),
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...options.headers,
       },
     });
@@ -62,7 +61,9 @@ function PurchaseRequests() {
     if (!response.ok) {
       const details = Array.isArray(data.errors)
         ? data.errors.join(". ")
-        : "";
+        : Array.isArray(data.details)
+          ? data.details.join(". ")
+          : "";
 
       throw new Error(
         details ||
@@ -84,10 +85,7 @@ function PurchaseRequests() {
 
       const list = Array.isArray(data)
         ? data
-        : data.data?.requests ??
-          data.requests ??
-          data.data ??
-          [];
+        : data.data?.requests ?? data.requests ?? data.data ?? [];
 
       setRequests(Array.isArray(list) ? list : []);
     } catch (err) {
@@ -115,7 +113,36 @@ function PurchaseRequests() {
     }));
   };
 
-  const handleCreate = async (event) => {
+  const resetForm = () => {
+    setForm(INITIAL_FORM);
+    setEditingRequestId("");
+    setShowForm(false);
+  };
+
+  const handleEdit = (request) => {
+    setError("");
+    setSuccess("");
+
+    const unitPricePaise = Number(request.unitPricePaise);
+
+    setForm({
+      title: request.title || "",
+      description: request.description || "",
+      justification: request.justification || "",
+      quantity: String(request.quantity ?? 1),
+      unitPrice:
+        Number.isSafeInteger(unitPricePaise) && unitPricePaise >= 0
+          ? (unitPricePaise / 100).toFixed(2)
+          : "",
+    });
+
+    setEditingRequestId(request._id || request.id);
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSaveRequest = async (event) => {
     event.preventDefault();
     setError("");
     setSuccess("");
@@ -133,6 +160,7 @@ function PurchaseRequests() {
     }
 
     if (
+      form.unitPrice.trim() === "" ||
       !Number.isFinite(unitPrice) ||
       unitPrice < 0 ||
       !Number.isSafeInteger(Math.round(unitPrice * 100))
@@ -159,27 +187,40 @@ function PurchaseRequests() {
       return;
     }
 
+    const input = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      justification: form.justification.trim(),
+      quantity,
+      unitPricePaise,
+    };
+
     setSaving(true);
 
     try {
-      await apiRequest("/requests", {
-        method: "POST",
-        body: JSON.stringify({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          justification: form.justification.trim(),
-          quantity,
-          unitPricePaise,
-        }),
-      });
+      if (editingRequestId) {
+        await apiRequest(`/requests/${editingRequestId}`, {
+          method: "PATCH",
+          body: JSON.stringify(input),
+        });
 
-      setForm(INITIAL_FORM);
-      setShowForm(false);
-      setSuccess("Purchase request created successfully as a draft.");
+        resetForm();
+        setSuccess(
+          "Request updated successfully. You can now resubmit it for approval."
+        );
+      } else {
+        await apiRequest("/requests", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+
+        resetForm();
+        setSuccess("Purchase request created successfully as a draft.");
+      }
 
       await loadRequests();
     } catch (err) {
-      setError(err.message || "Unable to create purchase request.");
+      setError(err.message || "Unable to save purchase request.");
     } finally {
       setSaving(false);
     }
@@ -191,11 +232,24 @@ function PurchaseRequests() {
     setSubmittingId(id);
 
     try {
-      await apiRequest(`/requests/${id}/submit`, {
-        method: "POST",
-      });
+      const request = requests.find(
+        (item) => String(item._id || item.id) === String(id)
+      );
 
-      setSuccess("Purchase request submitted for approval.");
+      if (request?.status === "rejected") {
+        await apiRequest(`/requests/${id}/resubmit`, {
+          method: "POST",
+        });
+
+        setSuccess("Purchase request resubmitted successfully.");
+      } else {
+        await apiRequest(`/requests/${id}/submit`, {
+          method: "POST",
+        });
+
+        setSuccess("Purchase request submitted for approval.");
+      }
+
       await loadRequests();
     } catch (err) {
       setError(err.message || "Unable to submit purchase request.");
@@ -226,6 +280,7 @@ function PurchaseRequests() {
   const unitPrice = Number(form.unitPrice);
 
   const previewTotal =
+    form.unitPrice.trim() !== "" &&
     Number.isSafeInteger(quantity) &&
     quantity > 0 &&
     Number.isFinite(unitPrice) &&
@@ -248,7 +303,14 @@ function PurchaseRequests() {
           onClick={() => {
             setError("");
             setSuccess("");
-            setShowForm((previous) => !previous);
+
+            if (showForm) {
+              resetForm();
+            } else {
+              setForm(INITIAL_FORM);
+              setEditingRequestId("");
+              setShowForm(true);
+            }
           }}
         >
           {showForm ? "Cancel" : "+ New Request"}
@@ -283,10 +345,19 @@ function PurchaseRequests() {
 
       {showForm && (
         <section className="pr-form-card">
-          <h2>Create purchase request</h2>
-          <p>Enter the details and save the request as a draft.</p>
+          <h2>
+            {editingRequestId
+              ? "Edit purchase request"
+              : "Create purchase request"}
+          </h2>
 
-          <form onSubmit={handleCreate} className="pr-form">
+          <p>
+            {editingRequestId
+              ? "Update the request details and save your changes before resubmitting."
+              : "Enter the details and save the request as a draft."}
+          </p>
+
+          <form onSubmit={handleSaveRequest} className="pr-form">
             <label htmlFor="title">Request title</label>
             <input
               id="title"
@@ -352,8 +423,7 @@ function PurchaseRequests() {
             <div className="pr-total-preview">
               <span>Total estimated amount</span>
               <strong>
-                {previewTotal !== null &&
-                Number.isFinite(previewTotal)
+                {previewTotal !== null && Number.isFinite(previewTotal)
                   ? formatCurrency(previewTotal)
                   : "—"}
               </strong>
@@ -364,8 +434,23 @@ function PurchaseRequests() {
               type="submit"
               disabled={saving}
             >
-              {saving ? "Creating..." : "Create Draft"}
+              {saving
+                ? "Saving..."
+                : editingRequestId
+                  ? "Save Changes"
+                  : "Create Draft"}
             </button>
+
+            {editingRequestId && (
+              <button
+                className="pr-secondary-button"
+                type="button"
+                disabled={saving}
+                onClick={resetForm}
+              >
+                Cancel Editing
+              </button>
+            )}
           </form>
         </section>
       )}
@@ -412,8 +497,8 @@ function PurchaseRequests() {
                 {requests.map((request) => {
                   const id = getId(request);
                   const status = request.status || "unknown";
-                  const canSubmit =
-                    status === "draft" || status === "rejected";
+                  const canEdit = ["draft", "rejected"].includes(status);
+                  const canSubmit = ["draft", "rejected"].includes(status);
 
                   return (
                     <tr key={id}>
@@ -430,42 +515,56 @@ function PurchaseRequests() {
                       <td>{formatCurrency(getAmount(request))}</td>
 
                       <td>
-                        <span
-                          className={`pr-status pr-status-${status}`}
-                        >
+                        <span className={`pr-status pr-status-${status}`}>
                           {formatStatus(status)}
                         </span>
                       </td>
 
                       <td>
                         {request.createdAt
-                          ? new Date(
-                              request.createdAt
-                            ).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
+                          ? new Date(request.createdAt).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )
                           : "—"}
                       </td>
 
                       <td>
-                        {canSubmit && id ? (
-                          <button
-                            className="pr-submit-button"
-                            type="button"
-                            disabled={Boolean(submittingId)}
-                            onClick={() => handleSubmitRequest(id)}
-                          >
-                            {submittingId === id
-                              ? "Submitting..."
-                              : status === "rejected"
-                                ? "Resubmit"
-                                : "Submit"}
-                          </button>
-                        ) : (
-                          <span className="pr-muted">—</span>
-                        )}
+                        <div className="pr-row-actions">
+                          {canEdit && id && (
+                            <button
+                              className="pr-secondary-button"
+                              type="button"
+                              disabled={saving || Boolean(submittingId)}
+                              onClick={() => handleEdit(request)}
+                            >
+                              Edit
+                            </button>
+                          )}
+
+                          {canSubmit && id && (
+                            <button
+                              className="pr-submit-button"
+                              type="button"
+                              disabled={Boolean(submittingId) || saving}
+                              onClick={() => handleSubmitRequest(id)}
+                            >
+                              {submittingId === id
+                                ? "Submitting..."
+                                : status === "rejected"
+                                  ? "Resubmit"
+                                  : "Submit"}
+                            </button>
+                          )}
+
+                          {!canEdit && !canSubmit && (
+                            <span className="pr-muted">—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

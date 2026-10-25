@@ -295,3 +295,17 @@
     padding: 13px 10px;
   }
 }
+
+
+
+.pr-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pr-row-actions .pr-secondary-button,
+.pr-row-actions .pr-submit-button {
+  white-space: nowrap;
+}

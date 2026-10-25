@@ -1,3 +1,4 @@
+
 import {
   createPurchaseRequest,
   getMyPurchaseRequests,
@@ -8,8 +9,6 @@ import {
   decidePurchaseRequest,
   resubmitPurchaseRequest,
 } from "../services/purchaseRequestService.js";
-
-
 
 export const createRequest = async (req, res, next) => {
   try {
@@ -30,8 +29,6 @@ export const createRequest = async (req, res, next) => {
   }
 };
 
-
-
 export const getMyRequests = async (req, res, next) => {
   try {
     const requests = await getMyPurchaseRequests(req.user._id);
@@ -47,7 +44,6 @@ export const getMyRequests = async (req, res, next) => {
     next(error);
   }
 };
-
 
 export const getRequestById = async (req, res, next) => {
   try {
@@ -67,8 +63,6 @@ export const getRequestById = async (req, res, next) => {
   }
 };
 
-
-
 export const updateDraftRequest = async (req, res, next) => {
   try {
     const request = await updateDraftPurchaseRequest({
@@ -87,9 +81,6 @@ export const updateDraftRequest = async (req, res, next) => {
   }
 };
 
-
-
-
 export const submitRequest = async (req, res, next) => {
   try {
     const request = await submitPurchaseRequest({
@@ -107,9 +98,6 @@ export const submitRequest = async (req, res, next) => {
   }
 };
 
-
-
-
 export const getManagerPendingApprovals = async (req, res, next) => {
   try {
     const requests = await getPendingApprovals(req.user._id);
@@ -125,7 +113,6 @@ export const getManagerPendingApprovals = async (req, res, next) => {
     next(error);
   }
 };
-
 
 export const decideRequest = async (req, res, next) => {
   try {
@@ -150,7 +137,6 @@ export const decideRequest = async (req, res, next) => {
     next(error);
   }
 };
-
 
 export const resubmitRequest = async (req, res, next) => {
   try {
