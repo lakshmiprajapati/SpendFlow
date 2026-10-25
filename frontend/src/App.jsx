@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Approvals from "./pages/Approvals.jsx";
 import PurchaseRequests from "./pages/PurchaseRequests.jsx";
 import Budgets from "./pages/Budgets.jsx";
+import AuditLogs from "./pages/AuditLogs.jsx";
 
 const API_URL = "http://localhost:5000/api";
 
@@ -177,6 +178,8 @@ function App() {
   }
 
   if (path === "/budgets") return <Budgets />;
+
+  if (path === "/audit-logs") return <AuditLogs />;
 
   return <Login />;
 }

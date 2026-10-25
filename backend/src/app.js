@@ -7,6 +7,7 @@ import purchaseRequestRoutes from "./routes/purchaseRequestRoutes.js";
 import budgetRoutes from "./routes/budgetRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
+import auditLogRoutes from "./routes/auditLogRoutes.js";
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use("/api/requests", purchaseRequestRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/departments", departmentRoutes);
+app.use("/api/audit-logs", auditLogRoutes);
 
 // Handle unknown routes — must come after all routes
 app.use((req, res) => {

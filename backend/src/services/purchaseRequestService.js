@@ -63,11 +63,11 @@ const selectApprovalPolicy = async (departmentId, amountPaise) => {
 
 
 
+
 const resolveApprovalSteps = async (policy, department) => {
   const approverFieldByType = {
     manager: "managerId",
     departmentHead: "departmentHeadId",
-    financeApprover: "financeApproverId",
   };
 
   const steps = [];
@@ -78,6 +78,16 @@ const resolveApprovalSteps = async (policy, department) => {
   )) {
     const departmentField =
       approverFieldByType[policyStep.approverType];
+
+    // Ignore approval types not supported by this workflow.
+    if (!departmentField) {
+      if (policyStep.required) {
+        errors.push(
+          `Unsupported required approver type: ${policyStep.approverType}`
+        );
+      }
+      continue;
+    }
 
     const approverId = department[departmentField];
 
@@ -135,6 +145,7 @@ const resolveApprovalSteps = async (policy, department) => {
 
   return steps;
 };
+
 
 
 
@@ -567,7 +578,6 @@ export const decidePurchaseRequest = async (
       const allowedRoles = [
         "manager",
         "departmentHead",
-        "financeApprover",
       ];
 
       if (!approver || !approver.isActive) {
