@@ -4,34 +4,38 @@ import cors from "cors";
 
 import authRoutes from "./routes/authRoutes.js";
 import purchaseRequestRoutes from "./routes/purchaseRequestRoutes.js";
-
 import budgetRoutes from "./routes/budgetRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 
 const app = express();
 
+// Global middleware
 app.use(cors());
 app.use(express.json({ limit: "10kb" }));
 
+// Root route
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Welcome to SpendFlow API",
+    message: "SpendFlow API is running",
   });
 });
 
+// Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "SpendFlow backend is running",
+    message: "API is healthy",
   });
 });
 
-// Authentication routes
+// Authentication and application routes
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", purchaseRequestRoutes);
+app.use("/api/budgets", budgetRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
-// Handle unknown routes
+// Handle unknown routes — must come after all routes
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -39,7 +43,7 @@ app.use((req, res) => {
   });
 });
 
-
+// Centralized error handler — must remain last
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -60,8 +64,5 @@ app.use((err, req, res, next) => {
     ...(err.details ? { errors: err.details } : {}),
   });
 });
-
-app.use("/api/budgets", budgetRoutes);
-app.use("/api/dashboard", dashboardRoutes);
 
 export default app;

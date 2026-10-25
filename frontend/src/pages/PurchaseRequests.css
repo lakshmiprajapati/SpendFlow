@@ -1,0 +1,297 @@
+
+.pr-page {
+  padding: 34px 36px;
+  color: #173d2d;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.pr-header,
+.pr-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.pr-header {
+  margin-bottom: 28px;
+}
+
+.pr-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #176343;
+}
+
+.pr-header h1 {
+  margin: 8px 0;
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+
+.pr-header p,
+.pr-list-heading p,
+.pr-form-card > p {
+  margin: 0;
+  color: #71847b;
+  font-size: 14px;
+}
+
+.pr-primary-button,
+.pr-secondary-button,
+.pr-submit-button {
+  border: 1px solid #d9e9df;
+  border-radius: 9px;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.pr-primary-button {
+  color: white;
+  background: #18563c;
+  border-color: #18563c;
+}
+
+.pr-primary-button:hover {
+  background: #10452f;
+}
+
+.pr-primary-button:disabled,
+.pr-secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pr-secondary-button {
+  background: white;
+  color: #20543c;
+}
+
+.pr-submit-button {
+  background: #e8f5ec;
+  color: #176343;
+  padding: 8px 12px;
+}
+
+.pr-form-card,
+.pr-list-card {
+  background: white;
+  border: 1px solid #e2eae5;
+  border-radius: 15px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 5px 18px rgba(18, 57, 38, 0.035);
+}
+
+.pr-form-card h2,
+.pr-list-heading h2 {
+  margin: 0 0 7px;
+  font-size: 19px;
+  color: #173d2d;
+}
+
+.pr-form {
+  display: grid;
+  gap: 10px;
+  max-width: 650px;
+  margin-top: 24px;
+}
+
+.pr-form label {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 5px;
+}
+
+.pr-form input,
+.pr-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: #fff;
+  color: #173d2d;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.pr-form input:focus,
+.pr-form textarea:focus {
+  border-color: #39815c;
+  box-shadow: 0 0 0 3px rgba(57, 129, 92, 0.1);
+}
+
+.pr-form textarea {
+  resize: vertical;
+}
+
+.pr-form .pr-primary-button {
+  margin-top: 12px;
+  justify-self: start;
+}
+
+.pr-alert {
+  padding: 14px 16px;
+  border-radius: 9px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.pr-alert button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.pr-alert-error {
+  background: #fff8e9;
+  color: #89520a;
+  border: 1px solid #f4dfae;
+}
+
+.pr-alert-success {
+  background: #edf8f0;
+  color: #176343;
+  border: 1px solid #d2ead9;
+}
+
+.pr-list-heading {
+  margin-bottom: 24px;
+}
+
+.pr-empty {
+  text-align: center;
+  padding: 48px 15px;
+  color: #75877d;
+  font-size: 13px;
+}
+
+.pr-empty h3 {
+  color: #173d2d;
+  margin-bottom: 7px;
+}
+
+.pr-empty-icon {
+  margin: 0 auto 14px;
+  height: 48px;
+  width: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf7f0;
+  color: #176343;
+  font-size: 24px;
+}
+
+.pr-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.pr-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.pr-table th {
+  color: #7b8e83;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 800;
+  background: #f8faf8;
+}
+
+.pr-table th,
+.pr-table td {
+  padding: 17px 13px;
+  border-bottom: 1px solid #edf0ed;
+  vertical-align: middle;
+}
+
+.pr-table td strong {
+  display: block;
+  color: #173d2d;
+}
+
+.pr-table td small {
+  display: block;
+  margin-top: 5px;
+  color: #7b8e83;
+  max-width: 250px;
+}
+
+.pr-status {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 20px;
+  background: #f0f2f0;
+  color: #526259;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pr-status-approved {
+  background: #e4f6e9;
+  color: #187345;
+}
+
+.pr-status-pending_approval {
+  background: #fff2d9;
+  color: #946000;
+}
+
+.pr-status-rejected {
+  background: #ffebeb;
+  color: #ad3434;
+}
+
+.pr-status-draft {
+  background: #eaf0ff;
+  color: #355da5;
+}
+
+.pr-muted {
+  color: #9ba8a0;
+}
+
+@media (max-width: 700px) {
+  .pr-page {
+    padding: 24px 16px;
+  }
+
+  .pr-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pr-header h1 {
+    font-size: 28px;
+  }
+
+  .pr-form-card,
+  .pr-list-card {
+    padding: 17px;
+  }
+
+  .pr-table th,
+  .pr-table td {
+    padding: 13px 10px;
+  }
+}

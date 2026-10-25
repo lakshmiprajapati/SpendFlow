@@ -2,6 +2,20 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
+import Budget from "../models/Budget.js";
+
+const getCurrentFiscalYear = () => {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+
+  // Indian fiscal year: 1 April to 31 March.
+  if (month >= 3) {
+    return `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
+  }
+
+  return `${year - 1}-${String(year % 100).padStart(2, "0")}`;
+};
 
 export const getEmployeeDashboard = async (req, res, next) => {
   try {
@@ -9,7 +23,18 @@ export const getEmployeeDashboard = async (req, res, next) => {
       String(req.user._id)
     );
 
-    const [summary, recentRequests] = await Promise.all([
+    const user = await User.findById(requesterId)
+      .select("departmentId")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const [summary, recentRequests, budget] = await Promise.all([
       PurchaseRequest.aggregate([
         { $match: { requesterId } },
         {
@@ -19,11 +44,23 @@ export const getEmployeeDashboard = async (req, res, next) => {
           },
         },
       ]),
+
       PurchaseRequest.find({ requesterId })
         .select("title totalAmountPaise status createdAt")
         .sort({ createdAt: -1 })
         .limit(5)
         .lean(),
+
+      user.departmentId
+        ? Budget.findOne({
+            departmentId: user.departmentId,
+            fiscalYear: getCurrentFiscalYear(),
+          })
+            .select(
+              "departmentId fiscalYear allocatedPaise committedPaise currency"
+            )
+            .lean()
+        : Promise.resolve(null),
     ]);
 
     const counts = {
@@ -36,12 +73,34 @@ export const getEmployeeDashboard = async (req, res, next) => {
     };
 
     for (const item of summary) {
-      counts[item._id] = item.count;
+      if (Object.hasOwn(counts, item._id) && item._id !== "total") {
+        counts[item._id] = item.count;
+      }
+
       counts.total += item.count;
     }
 
+    const allocatedPaise = budget?.allocatedPaise ?? null;
+    const committedPaise = budget?.committedPaise ?? null;
+
+    const budgetData = budget
+      ? {
+          departmentId: budget.departmentId,
+          fiscalYear: budget.fiscalYear,
+          currency: budget.currency,
+          allocatedPaise,
+          committedPaise,
+          remainingPaise: allocatedPaise - committedPaise,
+          allocatedAmount: allocatedPaise / 100,
+          committedAmount: committedPaise / 100,
+          remainingAmount: (allocatedPaise - committedPaise) / 100,
+        }
+      : null;
+
     return res.status(200).json({
+      success: true,
       summary: counts,
+      budget: budgetData,
       recentRequests: recentRequests.map((request) => ({
         ...request,
         amount: request.totalAmountPaise / 100,
@@ -80,6 +139,7 @@ export const getApproverDashboard = async (req, res, next) => {
 
     const [pendingCount, pendingRequests] = await Promise.all([
       PurchaseRequest.countDocuments(filter),
+
       PurchaseRequest.find(filter)
         .select(
           "requesterId departmentId title totalAmountPaise status createdAt"
