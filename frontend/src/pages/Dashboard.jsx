@@ -291,7 +291,7 @@ if (employeeResponse.ok) {
           <button
             type="button"
             className="sf-nav-item"
-            onClick={() => setError("Budgets page is coming next.")}
+            onClick={() => {window.location.href = "/budgets";}}
           >
             <span className="sf-nav-icon">◫</span>
             Budgets

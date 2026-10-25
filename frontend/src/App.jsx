@@ -4,6 +4,7 @@ import "./App.css";
 import Dashboard from "./pages/Dashboard.jsx";
 import Approvals from "./pages/Approvals.jsx";
 import PurchaseRequests from "./pages/PurchaseRequests.jsx";
+import Budgets from "./pages/Budgets.jsx";
 
 const API_URL = "http://localhost:5000/api";
 
@@ -174,6 +175,8 @@ function App() {
   if (path === "/approvals") {
     return <Approvals />;
   }
+
+  if (path === "/budgets") return <Budgets />;
 
   return <Login />;
 }
