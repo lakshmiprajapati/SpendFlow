@@ -1,6 +1,7 @@
 
 import Department from "../models/Department.js";
 
+
 export const getDepartments = async (req, res, next) => {
   try {
     const departments = await Department.find({ isActive: true })

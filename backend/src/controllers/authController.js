@@ -85,3 +85,87 @@ export const getMe = async (req, res) => {
   });
 };
 
+
+
+const DEMO_ROLE_CONFIG = {
+  employee: {
+    emailEnv: "DEMO_USER_EMAIL",
+    role: "employee",
+  },
+  manager: {
+    emailEnv: "DEMO_MANAGER_EMAIL",
+    role: "manager",
+  },
+  departmentHead: {
+    emailEnv: "DEMO_DEPARTMENT_HEAD_EMAIL",
+    role: "departmentHead",
+  },
+  financeApprover: {
+    emailEnv: "DEMO_FINANCE_APPROVER_EMAIL",
+    role: "financeApprover",
+  },
+};
+
+export const demoLogin = async (req, res, next) => {
+  try {
+    const { role } = req.body ?? {};
+    const config = DEMO_ROLE_CONFIG[role];
+
+    if (!config) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid demo role",
+      });
+    }
+
+    const configuredEmail = process.env[config.emailEnv];
+
+    if (!configuredEmail) {
+      return res.status(503).json({
+        success: false,
+        message: "This demo account is not configured",
+      });
+    }
+
+    const normalizedEmail = configuredEmail.trim().toLowerCase();
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      isActive: true,
+      roles: config.role,
+    });
+
+    if (!user) {
+      return res.status(503).json({
+        success: false,
+        message: "This demo account is unavailable",
+      });
+    }
+
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    const accessToken = generateAccessToken(user);
+
+    return res.status(200).json({
+      success: true,
+      message: "Demo login successful",
+      data: {
+        accessToken,
+        tokenType: "Bearer",
+        expiresIn: process.env.JWT_EXPIRES_IN || "15m",
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          roles: user.roles,
+          departmentId: user.departmentId,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+

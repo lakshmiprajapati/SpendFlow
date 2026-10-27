@@ -357,20 +357,27 @@ if (employeeResponse.ok) {
           <button
             type="button"
             className="sf-nav-item"
-            onClick={() => setError("Purchase Requests page is coming next.")}
+            onClick={() => {setSidebarOpen(false);window.location.href = "/purchase-requests";}}
           >
             <span className="sf-nav-icon">▤</span>
             Purchase Requests
           </button>
 
-          <button
-            type="button"
-            className="sf-nav-item"
-            onClick={() => setError("Approvals page is coming next.")}
-          >
-            <span className="sf-nav-icon">✓</span>
-            Approvals
-          </button>
+          
+{isApprover && (
+  <button
+    type="button"
+    className="sf-nav-item"
+    onClick={() => {
+      setSidebarOpen(false);
+      window.location.href = "/approvals";
+    }}
+  >
+    <span className="sf-nav-icon">✓</span>
+    Approvals
+  </button>
+)}
+
 
           <button
             type="button"

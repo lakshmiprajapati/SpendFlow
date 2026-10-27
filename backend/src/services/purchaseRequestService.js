@@ -66,22 +66,26 @@ const selectApprovalPolicy = async (departmentId, amountPaise) => {
 
 
 
+
+
 const resolveApprovalSteps = async (policy, department) => {
   const approverFieldByType = {
     manager: "managerId",
     departmentHead: "departmentHeadId",
+    financeApprover: "financeApproverId",
   };
 
   const steps = [];
   const errors = [];
 
-  for (const policyStep of [...policy.steps].sort(
+  const orderedPolicySteps = [...policy.steps].sort(
     (a, b) => a.sequence - b.sequence
-  )) {
+  );
+
+  for (const policyStep of orderedPolicySteps) {
     const departmentField =
       approverFieldByType[policyStep.approverType];
 
-    // Ignore approval types not supported by this workflow.
     if (!departmentField) {
       if (policyStep.required) {
         errors.push(
@@ -147,6 +151,8 @@ const resolveApprovalSteps = async (policy, department) => {
 
   return steps;
 };
+
+
 
 
 
@@ -573,6 +579,7 @@ export async function submitPurchaseRequest({ userId, requestId }) {
 
 
 
+
 export const decidePurchaseRequest = async (
   userId,
   requestId,
@@ -598,7 +605,9 @@ export const decidePurchaseRequest = async (
   }
 
   if (typeof comment !== "string" || comment.trim().length > 1000) {
-    const error = new Error("Comment must be a string of at most 1000 characters");
+    const error = new Error(
+      "Comment must be a string of at most 1000 characters"
+    );
     error.statusCode = 400;
     throw error;
   }
@@ -610,12 +619,13 @@ export const decidePurchaseRequest = async (
   }
 
   const session = await mongoose.startSession();
-  let updatedRequest;
-  let notificationDetails = null;
 
+  let updatedRequest = null;
+  let notificationDetails = null;
 
   try {
     await session.withTransaction(async () => {
+      // 1. Validate the active approver.
       const approver = await User.findById(userId)
         .select("_id isActive roles")
         .session(session);
@@ -623,6 +633,7 @@ export const decidePurchaseRequest = async (
       const allowedRoles = [
         "manager",
         "departmentHead",
+        "financeApprover",
       ];
 
       if (!approver || !approver.isActive) {
@@ -631,13 +642,21 @@ export const decidePurchaseRequest = async (
         throw error;
       }
 
-      if (!approver.roles.some((role) => allowedRoles.includes(role))) {
-        const error = new Error("Only authorized approvers can decide approval requests");
+      if (
+        !Array.isArray(approver.roles) ||
+        !approver.roles.some((role) => allowedRoles.includes(role))
+      ) {
+        const error = new Error(
+          "Only authorized approvers can decide approval requests"
+        );
         error.statusCode = 403;
         throw error;
       }
 
-      const request = await PurchaseRequest.findById(requestId).session(session);
+      // 2. Load the request inside the transaction.
+      const request = await PurchaseRequest.findById(requestId).session(
+        session
+      );
 
       if (!request) {
         const error = new Error("Purchase request not found");
@@ -645,8 +664,11 @@ export const decidePurchaseRequest = async (
         throw error;
       }
 
+      // Prevent decisions against completed or withdrawn requests.
       if (request.status !== "pending_approval") {
-        const error = new Error("This request is not pending approval");
+        const error = new Error(
+          "This request is not pending approval"
+        );
         error.statusCode = 409;
         throw error;
       }
@@ -661,6 +683,7 @@ export const decidePurchaseRequest = async (
         throw error;
       }
 
+      // 3. Find this approver's assigned pending step.
       const step = currentCycle.steps.find(
         (item) =>
           item.approverId &&
@@ -669,17 +692,22 @@ export const decidePurchaseRequest = async (
       );
 
       if (!step) {
-        const error = new Error("No pending approval step is assigned to this approver");
+        const error = new Error(
+          "No pending approval step is assigned to this approver"
+        );
         error.statusCode = 403;
         throw error;
       }
 
+      // 4. Enforce sequential approvals.
       const nextStep = currentCycle.steps
         .filter((item) => item.status === "pending")
         .sort((a, b) => a.sequence - b.sequence)[0];
 
       if (!nextStep || nextStep.sequence !== step.sequence) {
-        const error = new Error("Previous approval steps must be completed first");
+        const error = new Error(
+          "Previous approval steps must be completed first"
+        );
         error.statusCode = 409;
         throw error;
       }
@@ -691,6 +719,7 @@ export const decidePurchaseRequest = async (
       step.decidedAt = decidedAt;
       step.comment = comment.trim();
 
+      // 5. Handle rejection.
       if (decision === "reject") {
         request.status = "rejected";
         request.lastRejectionReason = comment.trim();
@@ -701,10 +730,12 @@ export const decidePurchaseRequest = async (
         );
 
         if (hasPendingSteps) {
+          // Approval is not final yet.
           request.status = "pending_approval";
         } else {
-          // All approval steps are complete: reserve the budget.
+          // 6. All steps are approved: reserve the budget atomically.
           const now = new Date();
+
           const fiscalYear =
             now.getUTCMonth() >= 3
               ? `${now.getUTCFullYear()}-${String(
@@ -714,19 +745,37 @@ export const decidePurchaseRequest = async (
                   now.getUTCFullYear() % 100
                 ).padStart(2, "0")}`;
 
+          if (
+            !Number.isSafeInteger(request.totalAmountPaise) ||
+            request.totalAmountPaise <= 0
+          ) {
+            const error = new Error(
+              "Request amount is invalid for budget reservation"
+            );
+            error.statusCode = 400;
+            throw error;
+          }
+
           const budget = await Budget.findOneAndUpdate(
             {
               departmentId: request.departmentId,
               fiscalYear,
               $expr: {
                 $lte: [
-                  { $add: ["$committedPaise", request.totalAmountPaise] },
+                  {
+                    $add: [
+                      "$committedPaise",
+                      request.totalAmountPaise,
+                    ],
+                  },
                   "$allocatedPaise",
                 ],
               },
             },
             {
-              $inc: { committedPaise: request.totalAmountPaise },
+              $inc: {
+                committedPaise: request.totalAmountPaise,
+              },
             },
             {
               new: true,
@@ -737,7 +786,8 @@ export const decidePurchaseRequest = async (
 
           if (!budget) {
             const error = new Error(
-              `No budget available for fiscal year ${fiscalYear}, or the remaining budget is insufficient`
+              `No budget available for fiscal year ${fiscalYear}, ` +
+                "or the remaining budget is insufficient"
             );
             error.statusCode = 409;
             throw error;
@@ -767,19 +817,8 @@ export const decidePurchaseRequest = async (
         }
       }
 
+      // 7. Save request and audit record in the same transaction.
       await request.save({ session });
-
-      notificationDetails = {
-  requesterId: request.requesterId,
-  requestId: request._id,
-  requestTitle: request.title,
-  actorId: approver._id,
-  decision,
-  nextApproverId: currentCycle.steps
-    .filter((item) => item.status === "pending")
-    .sort((a, b) => a.sequence - b.sequence)[0]?.approverId ?? null,
-  finalStatus: request.status,
-};
 
       await AuditLog.create(
         [
@@ -803,22 +842,35 @@ export const decidePurchaseRequest = async (
         { session }
       );
 
+      notificationDetails = {
+        requesterId: request.requesterId,
+        requestId: request._id,
+        requestTitle: request.title,
+        actorId: approver._id,
+        decision,
+        nextApproverId:
+          currentCycle.steps
+            .filter((item) => item.status === "pending")
+            .sort((a, b) => a.sequence - b.sequence)[0]?.approverId ??
+          null,
+        finalStatus: request.status,
+      };
+
       updatedRequest = request;
     });
   } finally {
     await session.endSession();
   }
 
-
-  // Notify the requester and the next approver after the decision is saved.
+  // 8. Create notifications after the transaction succeeds.
   if (notificationDetails) {
     try {
       const {
         requesterId,
-        requestId,
+        requestId: notificationRequestId,
         requestTitle,
         actorId,
-        decision,
+        decision: savedDecision,
         nextApproverId,
         finalStatus,
       } = notificationDetails;
@@ -828,26 +880,26 @@ export const decidePurchaseRequest = async (
           recipientId: requesterId,
           actorId,
           type:
-            decision === "reject"
+            savedDecision === "reject"
               ? "REQUEST_REJECTED"
               : "REQUEST_APPROVED",
           title:
-            decision === "reject"
+            savedDecision === "reject"
               ? "Purchase Request Rejected"
               : finalStatus === "approved"
                 ? "Purchase Request Approved"
                 : "Approval Step Completed",
           message:
-            decision === "reject"
+            savedDecision === "reject"
               ? `Your request "${requestTitle}" was rejected.`
               : finalStatus === "approved"
                 ? `Your request "${requestTitle}" has been fully approved.`
                 : `An approval step for "${requestTitle}" has been completed.`,
-          entityId: requestId,
+          entityId: notificationRequestId,
         }),
       ];
 
-      if (decision === "approve" && nextApproverId) {
+      if (savedDecision === "approve" && nextApproverId) {
         notifications.push(
           createNotification({
             recipientId: nextApproverId,
@@ -855,7 +907,7 @@ export const decidePurchaseRequest = async (
             type: "APPROVAL_PENDING",
             title: "Approval Required",
             message: `"${requestTitle}" is waiting for your approval.`,
-            entityId: requestId,
+            entityId: notificationRequestId,
           })
         );
       }
@@ -871,6 +923,7 @@ export const decidePurchaseRequest = async (
 
   return updatedRequest;
 };
+
 
 
 

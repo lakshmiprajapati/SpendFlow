@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
 import Budget from "../models/Budget.js";
+import { getPendingApprovals } from "../services/purchaseRequestService.js";
 
 const getCurrentFiscalYear = () => {
   const now = new Date();
@@ -111,14 +112,20 @@ export const getEmployeeDashboard = async (req, res, next) => {
   }
 };
 
+
+
+
 export const getApproverDashboard = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select(
-      "departmentId roles"
+      "_id isActive departmentId roles"
     );
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!user || !user.isActive) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found or inactive",
+      });
     }
 
     const isApprover = (user.roles || []).some((role) =>
@@ -127,32 +134,26 @@ export const getApproverDashboard = async (req, res, next) => {
 
     if (!isApprover) {
       return res.status(403).json({
+        success: false,
         message: "Only approvers can access this dashboard",
       });
     }
 
-    const filter = { status: "pending_approval" };
+    // Only count requests waiting for this user's current approval step.
+    const pendingRequests = await getPendingApprovals(user._id);
 
-    if (user.departmentId) {
-      filter.departmentId = user.departmentId;
-    }
-
-    const [pendingCount, pendingRequests] = await Promise.all([
-      PurchaseRequest.countDocuments(filter),
-
-      PurchaseRequest.find(filter)
-        .select(
-          "requesterId departmentId title totalAmountPaise status createdAt"
-        )
-        .populate("requesterId", "name email")
-        .sort({ createdAt: 1 })
-        .limit(20)
-        .lean(),
-    ]);
+    const dashboardRequests = pendingRequests
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() -
+          new Date(b.createdAt).getTime()
+      )
+      .slice(0, 20);
 
     return res.status(200).json({
-      pendingCount,
-      pendingRequests: pendingRequests.map((request) => ({
+      pendingCount: pendingRequests.length,
+      pendingRequests: dashboardRequests.map((request) => ({
         ...request,
         amount: request.totalAmountPaise / 100,
       })),
@@ -161,3 +162,4 @@ export const getApproverDashboard = async (req, res, next) => {
     next(error);
   }
 };
+
