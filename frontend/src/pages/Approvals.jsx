@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./Approvals.css";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://spendflow-api-j38v.onrender.com/api";
 
 function formatAmount(paise) {
   return new Intl.NumberFormat("en-IN", {

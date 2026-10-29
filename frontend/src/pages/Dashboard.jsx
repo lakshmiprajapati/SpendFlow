@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./Dashboard.css";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://spendflow-api-j38v.onrender.com/api";
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat("en-IN", {

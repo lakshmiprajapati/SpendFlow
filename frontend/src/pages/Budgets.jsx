@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./Budgets.css";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://spendflow-api-j38v.onrender.com/api";
 const CURRENT_FY = "2026-27";
 
 const formatCurrency = (amount) =>
