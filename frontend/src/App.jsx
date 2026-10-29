@@ -9,8 +9,7 @@ import Budgets from "./pages/Budgets.jsx";
 import AuditLogs from "./pages/AuditLogs.jsx";
 import ApprovalPolicies from "./pages/ApprovalPolicies.jsx";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = "https://spendflow-api-j38v.onrender.com/api";
 
 function LandingPage() {
   const goToLogin = () => {
